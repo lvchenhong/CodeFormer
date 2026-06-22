@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI证件照智能生成</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #2563eb;
+            --primary-light: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --success: #22c55e;
+            --success-light: #4ade80;
+            --success-dark: #16a34a;
+            --bg: #f6f7fb;
+            --card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 24px rgba(0,0,0,0.05);
+            --shadow-hover: 0 12px 40px rgba(0,0,0,0.1);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            padding: 48px 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header-title {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+        .header-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+        .main-card {
+            background: var(--card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            padding: 36px;
+            margin-bottom: 24px;
+            transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+        }
+        .main-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+        }
+        .upload-area {
+            border: 2px solid transparent;
+            background: linear-gradient(var(--card), var(--card)) padding-box,
+                        linear-gradient(135deg, rgba(37,99,235,0.2), rgba(139,92,246,0.2)) border-box;
+            border-radius: var(--radius-md);
+            padding: 40px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-area::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(37,99,235,0.05), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .upload-area:hover::before {
+            opacity: 1;
+        }
+        .upload-area:hover {
+            transform: scale(1.01);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.1);
+        }
+        .upload-area.dragover {
+            transform: scale(1.02);
+            box-shadow: 0 12px 48px rgba(37,99,235,0.18);
+            border-color: rgba(37,99,235,0.4);
+        }
+        .upload-area.has-file {
+            background: linear-gradient(var(--card), var(--card)) padding-box,
+                        linear-gradient(135deg, rgba(34,197,94,0.2), rgba(16,185,129,0.2)) border-box;
+            border-color: rgba(34,197,94,0.4);
+        }
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .upload-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .upload-hint {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .upload-filename {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 14px;
+            padding: 8px 20px;
+            background: rgba(34,197,94,0.1);
+            color: var(--success);
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .upload-area input { display: none; }
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            margin: 24px 0;
+        }
+        .toggle-label {
+            font-size: 15px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            cursor: pointer;
+        }
+        .toggle-switch input { display: none; }
+        .toggle-track {
+            position: absolute;
+            inset: 0;
+            background: #e2e8f0;
+            border-radius: 14px;
+            transition: background 0.3s;
+        }
+        .toggle-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .toggle-switch input:checked + .toggle-track {
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+        }
+        .toggle-switch input:checked ~ .toggle-thumb {
+            transform: translateX(22px);
+        }
+        .btn {
+            width: 100%;
+            height: 52px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 50%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(37,99,235,0.35);
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.5);
+        }
+        .btn-primary:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        .btn-primary:disabled {
+            background: #cbd5e1;
+            box-shadow: none;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-light) 0%, var(--success) 50%, var(--success-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(34,197,94,0.35);
+        }
+        .btn-success:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(34,197,94,0.5);
+        }
+        .btn-outline {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1.5px solid var(--border);
+        }
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(37,99,235,0.05);
+        }
+        .status {
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 20px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .status.info { background: #eff6ff; color: var(--primary); }
+        .status.success { background: #ecfdf5; color: var(--success); }
+        .status.error { background: #fee2e2; color: #dc2626; }
+        .status.loading { background: #fffbeb; color: #d97706; }
+        .result-card {
+            background: var(--card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            padding: 28px;
+            display: none;
+        }
+        .result-card.show {
+            display: block;
+            animation: slideUp 0.5s cubic-bezier(0.4,0,0.2,1);
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .result-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .result-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .result-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .result-img-wrap {
+            width: 100%;
+            max-width: 360px;
+            aspect-ratio: 3/4;
+            margin: 0 auto 28px;
+            overflow: hidden;
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .result-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+        .btn-group .btn {
+            flex: 1;
+        }
+        .btn-group .btn-outline {
+            flex: 0.5;
+        }
+        @media (max-width: 560px) {
+            body { padding: 32px 16px; }
+            .header-title { font-size: 28px; }
+            .main-card { padding: 24px; }
+            .upload-area { padding: 32px 16px; }
+            .upload-icon { font-size: 48px; }
+            .btn-group { flex-direction: column; }
+            .btn-group .btn { flex: 1; }
+            .btn-group .btn-outline { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">AI证件照智能生成</div>
+            <div class="header-subtitle">一键生成照相馆级证件照</div>
+        </div>
+
+        <div class="main-card">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📷</div>
+                <div class="upload-text">拖入或点击上传照片</div>
+                <div class="upload-hint">支持 JPG / PNG / WEBP</div>
+                <div class="upload-filename" id="uploadFilename" style="display:none;">
+                    <span>✓</span>
+                    <span id="filenameText"></span>
+                </div>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+
+            <div class="toggle-row">
+                <span class="toggle-label">高清增强（适合打印）</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="esrganCheck">
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                </label>
+            </div>
+
+            <button class="btn btn-primary" id="processBtn" disabled>
+                <span>✨ 生成证件照</span>
+            </button>
+
+            <div class="status" id="processStatus"></div>
+        </div>
+
+        <div class="status" id="uploadStatus"></div>
+
+        <div class="result-card" id="resultCard">
+            <div class="result-header">
+                <div class="result-title">🎯 证件照已生成</div>
+                <div class="result-subtitle">高清打印级画质，可直接使用</div>
+            </div>
+            <div class="result-img-wrap">
+                <img id="resultImg" class="result-img">
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-success" id="downloadBtn">📥 下载高清证件照</button>
+                <button class="btn btn-outline" id="retryBtn">🔄 重新上传</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const uploadFilename = document.getElementById('uploadFilename');
+        const filenameText = document.getElementById('filenameText');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const processBtn = document.getElementById('processBtn');
+        const esrganCheck = document.getElementById('esrganCheck');
+        const processStatus = document.getElementById('processStatus');
+        const resultCard = document.getElementById('resultCard');
+        const resultImg = document.getElementById('resultImg');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const retryBtn = document.getElementById('retryBtn');
+
+        let uploaded = false;
+        let currentResultUrl = '';
+
+        function showStatus(el, text, type) {
+            el.textContent = text;
+            el.className = 'status ' + type;
+            el.style.display = 'block';
+        }
+
+        function hideStatus(el) {
+            el.style.display = 'none';
+        }
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        async function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            uploadArea.classList.add('has-file');
+            filenameText.textContent = file.name;
+            uploadFilename.style.display = 'inline-flex';
+            showStatus(uploadStatus, '正在上传...', 'info');
+            processBtn.disabled = true;
+            resultCard.classList.remove('show');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if (data.success) {
+                    uploaded = true;
+                    showStatus(uploadStatus, '上传成功', 'success');
+                    processBtn.disabled = false;
+                } else {
+                    throw new Error(data.message || '上传失败');
+                }
+            } catch (err) {
+                uploaded = false;
+                uploadArea.classList.remove('has-file');
+                uploadFilename.style.display = 'none';
+                showStatus(uploadStatus, '错误: ' + err.message, 'error');
+            }
+        }
+
+        processBtn.addEventListener('click', async () => {
+            if (!uploaded) return;
+
+            const useEsrgan = esrganCheck.checked;
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span>⏳ 生成中...</span>';
+            showStatus(processStatus, 'AI正在处理，请稍候（约10-30秒）', 'loading');
+            resultCard.classList.remove('show');
+
+            try {
+                const params = new URLSearchParams();
+                params.append('use_esrgan', useEsrgan);
+                
+                const res = await fetch('/process?' + params.toString(), { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    currentResultUrl = data.result_url;
+                    resultImg.src = currentResultUrl + '?t=' + Date.now();
+                    resultCard.classList.add('show');
+                    showStatus(processStatus, '生成完成', 'success');
+                    
+                    setTimeout(() => {
+                        resultCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                } else {
+                    throw new Error(data.message || '生成失败');
+                }
+            } catch (err) {
+                showStatus(processStatus, '错误: ' + err.message, 'error');
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = '<span>✨ 生成证件照</span>';
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (!currentResultUrl) return;
+            const a = document.createElement('a');
+            a.href = currentResultUrl;
+            a.download = 'idphoto_' + Date.now() + '.png';
+            a.click();
+        });
+
+        retryBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            uploadArea.classList.remove('has-file');
+            uploadFilename.style.display = 'none';
+            hideStatus(uploadStatus);
+            hideStatus(processStatus);
+            resultCard.classList.remove('show');
+            uploaded = false;
+            processBtn.disabled = true;
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    </script>
+</body>
+</html>
