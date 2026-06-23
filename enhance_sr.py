@@ -105,7 +105,7 @@ face_mask_upscaled = cv2.resize(face_mask, (out_w, out_h), interpolation=cv2.INT
 face_mask_upscaled = np.expand_dims(face_mask_upscaled, axis=2)
 face_mask_upscaled = np.repeat(face_mask_upscaled, 3, axis=2)
 
-feather = 24
+feather = 12
 face_mask_upscaled = cv2.GaussianBlur(face_mask_upscaled, (feather*2+1, feather*2+1), feather/3)
 
 face_mean = np.mean(face_img * face_mask_upscaled)

@@ -27,22 +27,18 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 def v5_photo_studio_process(img):
     """
-    V5 PRO 工业影楼级后处理
-    光照一致性融合 + 影棚质感
+    V5 FINAL 工业级证件照后处理
+    固定参数，不允许运行时调参
     """
     img = img.astype(np.float32)
     
-    gamma = 1.05
-    img = np.power(img / 255.0, gamma) * 255.0
+    # V5 FINAL 全局光照收敛
+    img = cv2.convertScaleAbs(img.astype(np.uint8), alpha=0.98, beta=-1).astype(np.float32)
     
-    alpha = 1.03
-    beta = 2
-    img = cv2.convertScaleAbs(img.astype(np.uint8), alpha=alpha, beta=beta).astype(np.float32)
-    
-    saturation = 1.03
-    hsv = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2HSV)
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * saturation, 0, 255)
-    img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR).astype(np.float32)
+    # V5 FINAL 色彩微校正
+    img[:, :, 2] = np.clip(img[:, :, 2] * 1.01, 0, 255)  # R × 1.01
+    img[:, :, 1] = img[:, :, 1] * 1.00  # G × 1.00
+    img[:, :, 0] = np.clip(img[:, :, 0] * 0.99, 0, 255)  # B × 0.99
     
     img = np.clip(img, 0, 255).astype(np.uint8)
     return img
@@ -98,7 +94,7 @@ async def upload_image(file: UploadFile = File(...)):
 
 @app.post("/process")
 async def process_image(
-    w: float = 0.42,
+    w: float = 0.445,
     use_blend: bool = True,
     original_ratio: float = 0.88,
     ai_ratio: float = 0.12,
