@@ -13,31 +13,6 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-def init_realesrgan():
-    from realesrgan import RealESRGANer
-    from basicsr.archs.rrdbnet_arch import RRDBNet
-    
-    model = RRDBNet(
-        num_in_ch=3,
-        num_out_ch=3,
-        num_feat=64,
-        num_block=23,
-        num_grow_ch=32,
-        scale=4
-    )
-    
-    upsampler = RealESRGANer(
-        scale=4,
-        model_path='weights/RealESRGAN_x4plus.pth',
-        model=model,
-        tile=512,
-        tile_pad=10,
-        pre_pad=0,
-        half=True,
-        device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    )
-    return upsampler
-
 app = FastAPI()
 
 INPUT_DIR = Path("inputs")
@@ -110,9 +85,7 @@ async def process_image(
         if f.is_file():
             f.unlink()
     
-    python_path = os.path.join(os.environ.get("CONDA_PREFIX", ""), "python.exe")
-    if not os.path.exists(python_path):
-        python_path = "C:\\ProgramData\\miniconda3\\envs\\cf_env\\python.exe"
+    python_path = "C:\\ProgramData\\miniconda3\\envs\\cf_env\\python.exe"
     
     result = subprocess.run(
         [python_path, "inference_codeformer.py", "-w", str(w), "-i", "inputs", "-o", "outputs"],
@@ -161,12 +134,17 @@ async def process_image(
     
     if use_esrgan:
         try:
-            upsampler = init_realesrgan()
-            sr_img = cv2.imread(str(blended_path))
-            sr_output, _ = upsampler.enhance(sr_img, outscale=4)
-            result_filename = f"sr_{result_filename}"
-            sr_path = final_results_dir / result_filename
-            cv2.imwrite(str(sr_path), sr_output)
+            esrgan_result = subprocess.run(
+                [python_path, "enhance_sr.py", str(blended_path)],
+                capture_output=True,
+                text=True,
+                cwd=str(Path.cwd()),
+                encoding="utf-8",
+                errors="replace"
+            )
+            if esrgan_result.returncode != 0:
+                raise HTTPException(status_code=500, detail=f"高清增强失败: {esrgan_result.stderr[:500]}")
+            result_filename = result_filename.replace('.png', '_sr.png').replace('.jpg', '_sr.jpg').replace('.jpeg', '_sr.jpeg')
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"高清增强失败: {str(e)}")
     
