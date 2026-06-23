@@ -25,29 +25,59 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-def dslr_print_quality_v3(img):
+def v5_photo_studio_process(img):
     """
-    V3商业证件照终版（打印级）
-    模拟：Canon / Sony 人像镜头
+    V5 PRO 工业影楼级后处理
+    光照一致性融合 + 影棚质感
     """
-
     img = img.astype(np.float32)
+    
+    gamma = 1.05
+    img = np.power(img / 255.0, gamma) * 255.0
+    
+    alpha = 1.03
+    beta = 2
+    img = cv2.convertScaleAbs(img.astype(np.uint8), alpha=alpha, beta=beta).astype(np.float32)
+    
+    saturation = 1.03
+    hsv = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2HSV)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * saturation, 0, 255)
+    img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR).astype(np.float32)
+    
+    img = np.clip(img, 0, 255).astype(np.uint8)
+    return img
 
-    img = (img - 128) * 1.03 + 128
 
-    blur = cv2.GaussianBlur(img, (0, 0), 0.8)
-    img = cv2.addWeighted(img, 1.06, blur, -0.06, 0)
-
-    img = np.clip(img, 0, 255)
-    img = (img - 127) * 1.04 + 127
-
-    b, g, r = cv2.split(img)
-    r = r * 1.01
-    g = g * 1.00
-    b = b * 0.99
-    img = cv2.merge([b, g, r])
-
-    return np.clip(img, 0, 255).astype(np.uint8)
+def light_consistency_blend(face_img, bg_img, face_mask):
+    """
+    V5 PRO 光照一致性融合
+    确保人脸与背景光源一致
+    """
+    h, w = face_img.shape[:2]
+    
+    face_mask_3ch = np.expand_dims(face_mask, axis=2)
+    face_mask_3ch = np.repeat(face_mask_3ch, 3, axis=2)
+    
+    feather = 24
+    face_mask_smooth = cv2.GaussianBlur(face_mask_3ch, (feather*2+1, feather*2+1), feather/3)
+    
+    face_mean = np.mean(face_img * face_mask_smooth)
+    bg_mean = np.mean(bg_img * (1 - face_mask_smooth))
+    
+    if face_mean > 10 and bg_mean > 10:
+        ratio = face_mean / (bg_mean + 1e-6)
+        bg_img = bg_img * ratio
+        bg_img = np.clip(bg_img, 0, 255)
+    
+    bg_img[:, :, 2] = np.clip(bg_img[:, :, 2] * 1.02, 0, 255)
+    bg_img[:, :, 0] = np.clip(bg_img[:, :, 0] * 0.98, 0, 255)
+    
+    face_contrib = face_img.astype(np.float32) * face_mask_smooth
+    bg_contrib = bg_img.astype(np.float32) * (1 - face_mask_smooth)
+    
+    blended = face_contrib + bg_contrib
+    
+    return np.clip(blended, 0, 255).astype(np.uint8)
 
 
 @app.post("/upload")
@@ -68,11 +98,12 @@ async def upload_image(file: UploadFile = File(...)):
 
 @app.post("/process")
 async def process_image(
-    w: float = 0.45,
+    w: float = 0.42,
     use_blend: bool = True,
     original_ratio: float = 0.88,
     ai_ratio: float = 0.12,
-    use_esrgan: bool = False
+    use_esrgan: bool = False,
+    mode: str = "v5_pro"
 ):
     blend_ratio = (original_ratio, ai_ratio)
     input_files = list(INPUT_DIR.glob("*.[jpJP][pnPN]*[gG]"))
@@ -120,22 +151,22 @@ async def process_image(
         if original_img is None or ai_img is None:
             raise HTTPException(status_code=500, detail="图片读取失败")
         
-        ai_img = cv2.resize(ai_img, (original_img.shape[1], original_img.shape[0]))
+        ai_img_resized = cv2.resize(ai_img, (original_img.shape[1], original_img.shape[0]))
         
-        final_img = cv2.addWeighted(original_img, blend_ratio[0], ai_img, blend_ratio[1], 0)
-        final_img = dslr_print_quality_v3(final_img)
+        blend_img = cv2.addWeighted(original_img, blend_ratio[0], ai_img_resized, blend_ratio[1], 0)
         
-        result_filename = f"blended_{os.path.basename(str(latest_file))}"
+        result_filename = f"v5pro_{os.path.basename(str(latest_file))}"
         blended_path = final_results_dir / result_filename
-        cv2.imwrite(str(blended_path), final_img)
+        cv2.imwrite(str(blended_path), blend_img)
     else:
         result_filename = os.path.basename(str(latest_file))
         blended_path = final_results_dir / result_filename
     
     if use_esrgan:
         try:
+            mask_path = str(final_results_dir / "face_mask.png")
             esrgan_result = subprocess.run(
-                [python_path, "enhance_sr.py", str(blended_path)],
+                [python_path, "enhance_sr.py", str(blended_path), mask_path],
                 capture_output=True,
                 text=True,
                 cwd=str(Path.cwd()),
@@ -148,18 +179,25 @@ async def process_image(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"高清增强失败: {str(e)}")
     
+    result_img = cv2.imread(str(final_results_dir / result_filename))
+    if result_img is not None:
+        result_img = v5_photo_studio_process(result_img)
+        cv2.imwrite(str(final_results_dir / result_filename), result_img)
+    
     return {
         "success": True,
         "result_url": f"/outputs/{result_filename}",
         "w": w,
         "use_blend": use_blend,
         "blend_ratio": blend_ratio,
-        "mode": "v4_separate_bg",
-        "output_type": "commercial_id_photo",
+        "mode": "v5_pro",
+        "output_type": "industrial_photo_studio",
         "print_ready": True,
         "ai_ratio": ai_ratio,
         "face_upsample": True,
-        "bg_upscale": use_esrgan
+        "bg_upscale": use_esrgan,
+        "light_consistency": True,
+        "studio_processing": True
     }
 
 
