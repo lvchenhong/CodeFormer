@@ -68,7 +68,7 @@ async def upload_image(file: UploadFile = File(...)):
 
 @app.post("/process")
 async def process_image(
-    w: float = 0.35,
+    w: float = 0.45,
     use_blend: bool = True,
     original_ratio: float = 0.88,
     ai_ratio: float = 0.12,
@@ -154,10 +154,12 @@ async def process_image(
         "w": w,
         "use_blend": use_blend,
         "blend_ratio": blend_ratio,
-        "mode": "v3_print_quality",
+        "mode": "v4_separate_bg",
         "output_type": "commercial_id_photo",
         "print_ready": True,
-        "ai_ratio": ai_ratio
+        "ai_ratio": ai_ratio,
+        "face_upsample": True,
+        "bg_upscale": use_esrgan
     }
 
 

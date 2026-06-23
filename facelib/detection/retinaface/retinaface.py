@@ -217,7 +217,7 @@ class RetinaFace(nn.Module):
 
         landmarks = decode_landm(landmarks.squeeze(0), priors, self.cfg['variance'])
         landmarks = landmarks * self.scale1 / self.resize
-        landmarks = landmarks.cpu().numpy()
+        landmarks = landmarks.detach().cpu().numpy()
 
         # ignore low scores
         inds = np.where(scores > conf_threshold)[0]
