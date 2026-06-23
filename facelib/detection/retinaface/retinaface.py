@@ -11,9 +11,8 @@ from facelib.detection.retinaface.retinaface_net import FPN, SSH, MobileNetV1, m
 from facelib.detection.retinaface.retinaface_utils import (PriorBox, batched_decode, batched_decode_landm, decode, decode_landm,
                                                  py_cpu_nms)
 
-from basicsr.utils.misc import get_device
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = get_device()
+# from basicsr.utils.misc import get_device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def generate_config(network_name):

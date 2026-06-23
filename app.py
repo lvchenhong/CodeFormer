@@ -7,10 +7,36 @@ from datetime import datetime
 
 import cv2
 import numpy as np
+import torch
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+def init_realesrgan():
+    from realesrgan import RealESRGANer
+    from basicsr.archs.rrdbnet_arch import RRDBNet
+    
+    model = RRDBNet(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_block=23,
+        num_grow_ch=32,
+        scale=4
+    )
+    
+    upsampler = RealESRGANer(
+        scale=4,
+        model_path='weights/RealESRGAN_x4plus.pth',
+        model=model,
+        tile=512,
+        tile_pad=10,
+        pre_pad=0,
+        half=True,
+        device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    )
+    return upsampler
 
 app = FastAPI()
 
@@ -58,9 +84,6 @@ async def upload_image(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename)[1]
     safe_filename = f"upload_{timestamp}{ext}"
     
-    for f in INPUT_DIR.rglob("*.[jpJP][pnPN]*[gG]"):
-        f.unlink()
-    
     file_path = INPUT_DIR / safe_filename
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -89,7 +112,7 @@ async def process_image(
     
     python_path = os.path.join(os.environ.get("CONDA_PREFIX", ""), "python.exe")
     if not os.path.exists(python_path):
-        python_path = "C:\\ProgramData\\miniconda3\\envs\\idphoto\\python.exe"
+        python_path = "C:\\ProgramData\\miniconda3\\envs\\cf_env\\python.exe"
     
     result = subprocess.run(
         [python_path, "inference_codeformer.py", "-w", str(w), "-i", "inputs", "-o", "outputs"],
@@ -134,6 +157,18 @@ async def process_image(
         cv2.imwrite(str(blended_path), final_img)
     else:
         result_filename = os.path.basename(str(latest_file))
+        blended_path = final_results_dir / result_filename
+    
+    if use_esrgan:
+        try:
+            upsampler = init_realesrgan()
+            sr_img = cv2.imread(str(blended_path))
+            sr_output, _ = upsampler.enhance(sr_img, outscale=4)
+            result_filename = f"sr_{result_filename}"
+            sr_path = final_results_dir / result_filename
+            cv2.imwrite(str(sr_path), sr_output)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"高清增强失败: {str(e)}")
     
     return {
         "success": True,

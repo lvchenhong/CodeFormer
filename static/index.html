@@ -73,6 +73,10 @@
             transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
             position: relative;
             overflow: hidden;
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto;
+            aspect-ratio: 3/4;
         }
         .upload-area::before {
             content: '';
@@ -127,6 +131,33 @@
             font-weight: 500;
         }
         .upload-area input { display: none; }
+        .upload-preview {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+        .upload-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .upload-area.has-file .upload-preview {
+            display: flex;
+        }
+        .upload-area.has-file .upload-icon,
+        .upload-area.has-file .upload-text,
+        .upload-area.has-file .upload-hint {
+            display: none;
+        }
+        .upload-area.has-file {
+            border: 2px solid rgba(34,197,94,0.3);
+            padding: 0;
+        }
         .toggle-row {
             display: flex;
             justify-content: space-between;
@@ -327,6 +358,9 @@
                     <span>✓</span>
                     <span id="filenameText"></span>
                 </div>
+                <div class="upload-preview">
+                    <img id="uploadPreviewImg">
+                </div>
                 <input type="file" id="fileInput" accept="image/*">
             </div>
 
@@ -369,6 +403,7 @@
         const uploadFilename = document.getElementById('uploadFilename');
         const filenameText = document.getElementById('filenameText');
         const uploadStatus = document.getElementById('uploadStatus');
+        const uploadPreviewImg = document.getElementById('uploadPreviewImg');
         const processBtn = document.getElementById('processBtn');
         const esrganCheck = document.getElementById('esrganCheck');
         const processStatus = document.getElementById('processStatus');
@@ -417,6 +452,12 @@
             const file = fileInput.files[0];
             if (!file) return;
 
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadPreviewImg.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+
             uploadArea.classList.add('has-file');
             filenameText.textContent = file.name;
             uploadFilename.style.display = 'inline-flex';
@@ -441,6 +482,7 @@
                 uploaded = false;
                 uploadArea.classList.remove('has-file');
                 uploadFilename.style.display = 'none';
+                uploadPreviewImg.src = '';
                 showStatus(uploadStatus, '错误: ' + err.message, 'error');
             }
         }
@@ -493,6 +535,7 @@
             fileInput.value = '';
             uploadArea.classList.remove('has-file');
             uploadFilename.style.display = 'none';
+            uploadPreviewImg.src = '';
             hideStatus(uploadStatus);
             hideStatus(processStatus);
             resultCard.classList.remove('show');

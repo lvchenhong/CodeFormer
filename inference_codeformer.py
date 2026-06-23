@@ -6,11 +6,14 @@ import torch
 from torchvision.transforms.functional import normalize
 from basicsr.utils import imwrite, img2tensor, tensor2img
 from basicsr.utils.download_util import load_file_from_url
-from basicsr.utils.misc import gpu_is_available, get_device
+from basicsr.utils.misc import get_device
 from facelib.utils.face_restoration_helper import FaceRestoreHelper
 from facelib.utils.misc import is_gray
 
 from basicsr.utils.registry import ARCH_REGISTRY
+
+def gpu_is_available():
+    return torch.cuda.is_available()
 
 pretrain_model_url = {
     'restoration': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth',
@@ -54,7 +57,7 @@ def set_realesrgan():
 
 if __name__ == '__main__':
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = get_device()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-i', '--input_path', type=str, default='./inputs/whole_imgs', 
